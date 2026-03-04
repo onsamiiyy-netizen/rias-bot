@@ -18,10 +18,19 @@ def init_db():
         CREATE TABLE IF NOT EXISTS players (
             user_id BIGINT PRIMARY KEY,
             name TEXT,
-            balance INTEGER DEFAULT 1000,
-            last_bonus TEXT DEFAULT NULL
+            balance INTEGER DEFAULT 0,
+            last_bonus TEXT DEFAULT NULL,
+            diamonds INTEGER DEFAULT 0,
+            total_deposited INTEGER DEFAULT 0
         )
     """)
+    # Миграция: добавляем новые колонки если их нет
+    for col, default in [("diamonds", "0"), ("total_deposited", "0")]:
+        try:
+            c.execute(f"ALTER TABLE players ADD COLUMN {col} INTEGER DEFAULT {default}")
+            conn.commit()
+        except Exception:
+            conn.rollback()
     c.execute("""
         CREATE TABLE IF NOT EXISTS bets (
             id SERIAL PRIMARY KEY,
@@ -51,7 +60,7 @@ def get_player(user_id, name=None):
             (user_id, name, 0)
         )
         conn.commit()
-    c.execute("SELECT user_id, name, balance, last_bonus FROM players WHERE user_id=%s", (user_id,))
+    c.execute("SELECT user_id, name, balance, last_bonus, diamonds, total_deposited FROM players WHERE user_id=%s", (user_id,))
     row = c.fetchone()
     conn.close()
     return row
@@ -74,6 +83,28 @@ def set_last_bonus(user_id, date_str):
     conn = get_conn()
     c = conn.cursor()
     c.execute("UPDATE players SET last_bonus=%s WHERE user_id=%s", (date_str, user_id))
+    conn.commit()
+    conn.close()
+
+def add_diamonds(user_id, amount):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("UPDATE players SET diamonds = diamonds + %s WHERE user_id=%s", (amount, user_id))
+    conn.commit()
+    conn.close()
+
+def get_diamonds(user_id):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT diamonds FROM players WHERE user_id=%s", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else 0
+
+def add_total_deposited(user_id, amount):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("UPDATE players SET total_deposited = total_deposited + %s WHERE user_id=%s", (amount, user_id))
     conn.commit()
     conn.close()
 
@@ -103,7 +134,7 @@ def clear_bets(chat_id):
 def get_top(limit=10):
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT name, balance FROM players ORDER BY balance DESC LIMIT %s", (limit,))
+    c.execute("SELECT name, diamonds FROM players ORDER BY diamonds DESC LIMIT %s", (limit,))
     rows = c.fetchall()
     conn.close()
     return rows
@@ -131,3 +162,5 @@ def session_reset(user_id):
     c.execute("UPDATE session_stats SET session_bet=0, session_win=0 WHERE user_id=%s", (user_id,))
     conn.commit()
     conn.close()
+
+
