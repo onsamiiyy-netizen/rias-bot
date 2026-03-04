@@ -92,7 +92,7 @@ def bet_label(bet_type):
 
 def main_keyboard():
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row(KeyboardButton("🎰 Играть"), KeyboardButton("🟡 Баланс"))
+    kb.row(KeyboardButton("🎰 Играть"), KeyboardButton("💰 Баланс"))
     kb.row(KeyboardButton("🎁 Бонус"), KeyboardButton("🏆 Топ игроков"))
     kb.row(KeyboardButton("📖 Правила"))
     kb.row(KeyboardButton("💳 Пополнить"), KeyboardButton("💸 Вывести"))
@@ -144,8 +144,8 @@ def amount_keyboard(bet_type, currency="silver"):
 def currency_keyboard(bet_type):
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
-        InlineKeyboardButton("⚪ Золотые", callback_data=f"cur_{bet_type}_gold"),
-        InlineKeyboardButton("🟡 Серебряные", callback_data=f"cur_{bet_type}_diamond"),
+        InlineKeyboardButton("⚪ Серебряные", callback_data=f"cur_{bet_type}_silver"),
+        InlineKeyboardButton("🟡 Золотые", callback_data=f"cur_{bet_type}_gold"),
     )
     kb.add(InlineKeyboardButton("Назад", callback_data="back_to_bets"))
     return kb
@@ -214,16 +214,16 @@ def cb_game_mines(call):
         call.message.chat.id, call.message.message_id,
         reply_markup=mines_start_keyboard())
 
-@bot.message_handler(func=lambda m: m.text == "🟡 Баланс")
+@bot.message_handler(func=lambda m: m.text == "💰 Баланс")
 def msg_balance(msg):
     p = get_player(msg.from_user.id, msg.from_user.first_name)
     gold = p[2]
     diamonds = p[4] if len(p) > 4 else 0
     total_deposited = p[5] if len(p) > 5 else 0
     bot.send_message(msg.chat.id,
-        f"🟡 {p[1]}, ваш баланс:\n\n"
-        f"⚪ Золотые: {gold} (для игры)\n"
-        f"🟡 Серебряные: {diamonds} (для вывода)\n\n"
+        f"💰 {p[1]}, ваш баланс:\n\n"
+        f"⚪ Серебряные: {gold} (для игры)\n"
+        f"🟡 Золотые: {diamonds} (для вывода)\n\n"
         f"📥 Задепонировано всего: {total_deposited} / 75 🟡")
 
 @bot.message_handler(func=lambda m: m.text == "🏆 Топ игроков")
@@ -233,7 +233,7 @@ def msg_top(msg):
     text = "🏆 Таблица лидеров:\n\n"
     for i, (name, bal) in enumerate(rows):
         m = medals[i] if i < len(medals) else f"{i+1}."
-        text += f"{m} {name} — {bal} ⚪\n"
+        text += f"{m} {name} — {bal} 🟡\n"
     bot.send_message(msg.chat.id, text)
 
 @bot.message_handler(func=lambda m: m.text == "🎁 Бонус")
@@ -248,7 +248,7 @@ def msg_bonus(msg):
     update_balance(msg.from_user.id, bonus)
     set_last_bonus(msg.from_user.id, today)
     bot.send_message(msg.chat.id,
-        f"🎁 Ежедневный бонус!\nВы получили {bonus} ⚪ золотых!\nНовый баланс: {p[2] + bonus} 🟡")
+        f"🎁 Ежедневный бонус!\nВы получили {bonus} ⚪ серебряных!\nНовый баланс: {p[2] + bonus} ⚪")
 
 @bot.message_handler(func=lambda m: m.text == "📖 Правила")
 def msg_rules(msg):
@@ -311,7 +311,7 @@ def cb_bet_type(call):
         p = get_player(call.from_user.id, call.from_user.first_name)
         diamonds = get_silver(call.from_user.id)
         bot.edit_message_text(
-            f"🟡 {bet_label(bet_type)}\n\n⚪ Золотые: {p[2]}\n🟡 Серебряные: {diamonds}\n\nВыберите валюту для ставки:",
+            f"🎰 {bet_label(bet_type)}\n\n⚪ Серебряные: {p[2]}\n🟡 Золотые: {diamonds}\n\nВыберите валюту для ставки:",
             call.message.chat.id, call.message.message_id,
             reply_markup=currency_keyboard(bet_type))
     except Exception:
@@ -326,7 +326,7 @@ def cb_number_bet(call):
         p = get_player(call.from_user.id, call.from_user.first_name)
         diamonds = get_silver(call.from_user.id)
         bot.edit_message_text(
-            f"🟡 {bet_label(bet_type)}\n\n⚪ Золотые: {p[2]}\n🟡 Серебряные: {diamonds}\n\nВыберите валюту для ставки:",
+            f"🎰 {bet_label(bet_type)}\n\n⚪ Серебряные: {p[2]}\n🟡 Золотые: {diamonds}\n\nВыберите валюту для ставки:",
             call.message.chat.id, call.message.message_id,
             reply_markup=currency_keyboard(bet_type))
     except Exception:
@@ -350,7 +350,7 @@ def cb_currency(call):
 
         p = get_player(call.from_user.id, call.from_user.first_name)
         diamonds = get_silver(call.from_user.id)
-        cur_label = "⚪ Золотые" if currency == "silver" else "🟡 Золотые"
+        cur_label = "⚪ Серебряные" if currency == "silver" else "🟡 Золотые"
         balance = p[2] if currency == "silver" else diamonds
         bot.edit_message_text(
             f"🟡 {bet_label(bet_type)} | {cur_label}\n\nБаланс: {balance}\nВыберите сумму ставки:",
@@ -403,7 +403,7 @@ def cb_amount(call):
         cur_icon = "⚪" if currency == "silver" else "🟡"
 
         bot.edit_message_text(
-            f"Ставка принята!\n{p_new[1]}: {amount} {cur_icon} на {bet_label(bet_type)}\n⚪ Золотых: {p_new[2]} | ⚪ Алмазных: {get_silver(call.from_user.id)}\n\nЖдём других или крутим?",
+            f"Ставка принята!\n{p_new[1]}: {amount} {cur_icon} на {bet_label(bet_type)}\n⚪ Серебряных: {p_new[2]} | 🟡 Золотых: {get_silver(call.from_user.id)}\n\nЖдём других или крутим?",
             call.message.chat.id, call.message.message_id,
             reply_markup=after_bet_keyboard())
     except Exception:
@@ -458,7 +458,7 @@ def cb_spin(call):
                 add_silver(uid, total_win)
                 new_silver = get_silver(uid)
                 session_add_win(uid, total_win)
-                winners_text += f"🏆 {p[1]}: +{total_win} ⚪ (серебряных: {new_silver})\n"
+                winners_text += f"🏆 {p[1]}: +{total_win} 🟡 (золотых: {new_silver})\n"
             else:
                 losers_text += f"💸 {p[1]}: проиграл\n"
 
@@ -703,7 +703,7 @@ def cb_mines_open(call):
                 kb = InlineKeyboardMarkup()
                 kb.add(InlineKeyboardButton("🎮 Играть снова", callback_data="mines_restart"))
                 bot.edit_message_text(
-                    f"🎉 Вы открыли все клетки! Выигрыш: {potential} ⚪\nСеребряных на балансе: {new_silver} ⚪",
+                    f"🎉 Вы открыли все клетки! Выигрыш: {potential} 🟡\nЗолотых на балансе: {new_silver} 🟡",
                     call.message.chat.id, call.message.message_id,
                     reply_markup=kb)
             else:
@@ -742,7 +742,7 @@ def cb_mines_cashout(call):
         kb = InlineKeyboardMarkup()
         kb.add(InlineKeyboardButton("🎮 Играть снова", callback_data="mines_restart"))
         bot.edit_message_text(
-            f"🟡 Вы забрали выигрыш!\nСтавка: {game['bet']} ⚪ | Множитель: x{mult} | Выигрыш: {win} ⚪\nАлмазных: {new_silver} ⚪",
+            f"🟡 Вы забрали выигрыш!\nСтавка: {game['bet']} ⚪ | Множитель: x{mult} | Выигрыш: {win} 🟡\nЗолотых: {new_silver} 🟡",
             call.message.chat.id, call.message.message_id,
             reply_markup=kb)
     except Exception:
