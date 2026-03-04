@@ -350,7 +350,7 @@ def cb_currency(call):
 
         p = get_player(call.from_user.id, call.from_user.first_name)
         diamonds = get_silver(call.from_user.id)
-        cur_label = "⚪ Золотые" if currency == "silver" → 🟡 Серебряные"
+        cur_label = "⚪ Золотые" if currency == "silver" else "🟡 Золотые"
         balance = p[2] if currency == "silver" else diamonds
         bot.edit_message_text(
             f"🟡 {bet_label(bet_type)} | {cur_label}\n\nБаланс: {balance}\nВыберите сумму ставки:",
@@ -388,7 +388,7 @@ def cb_amount(call):
             bot.answer_callback_query(call.id, "У вас нет средств!")
             return
         if amount > balance:
-            cur_label = "⚪" if currency == "silver" → 🟡"
+            cur_label = "⚪" if currency == "silver" else "🟡"
             bot.answer_callback_query(call.id, f"Недостаточно {cur_label}! Баланс: {balance}")
             return
 
@@ -400,7 +400,7 @@ def cb_amount(call):
         add_bet(call.message.chat.id, call.from_user.id, bet_type, amount)
         session_add_bet(call.from_user.id, amount)
         p_new = get_player(call.from_user.id)
-        cur_icon = "⚪" if currency == "silver" → 🟡"
+        cur_icon = "⚪" if currency == "silver" else "🟡"
 
         bot.edit_message_text(
             f"Ставка принята!\n{p_new[1]}: {amount} {cur_icon} на {bet_label(bet_type)}\n⚪ Золотых: {p_new[2]} | ⚪ Алмазных: {get_silver(call.from_user.id)}\n\nЖдём других или крутим?",
@@ -781,7 +781,7 @@ def msg_custom_bet(msg):
     diamonds = get_silver(uid)
     balance = p[2] if currency == "silver" else diamonds
     if amount > balance:
-        cur_icon = "⚪" if currency == "silver" → 🟡"
+        cur_icon = "⚪" if currency == "silver" else "🟡"
         bot.send_message(msg.chat.id, f"Недостаточно {cur_icon}! Баланс: {balance}")
         custom_bet_waiting[uid] = data
         return
