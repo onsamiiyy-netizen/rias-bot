@@ -1,3 +1,6 @@
+
+Copy
+
 """
 Общий модуль для работы с PostgreSQL
 """
@@ -20,12 +23,12 @@ def init_db():
             name TEXT,
             balance INTEGER DEFAULT 0,
             last_bonus TEXT DEFAULT NULL,
-            diamonds INTEGER DEFAULT 0,
+            silver INTEGER DEFAULT 0,
             total_deposited INTEGER DEFAULT 0
         )
     """)
     # Миграция: добавляем новые колонки если их нет
-    for col, default in [("diamonds", "0"), ("total_deposited", "0")]:
+    for col, default in [("silver", "0"), ("total_deposited", "0")]:
         try:
             c.execute(f"ALTER TABLE players ADD COLUMN {col} INTEGER DEFAULT {default}")
             conn.commit()
@@ -60,7 +63,7 @@ def get_player(user_id, name=None):
             (user_id, name, 0)
         )
         conn.commit()
-    c.execute("SELECT user_id, name, balance, last_bonus, diamonds, total_deposited FROM players WHERE user_id=%s", (user_id,))
+    c.execute("SELECT user_id, name, balance, last_bonus, silver, total_deposited FROM players WHERE user_id=%s", (user_id,))
     row = c.fetchone()
     conn.close()
     return row
@@ -86,17 +89,17 @@ def set_last_bonus(user_id, date_str):
     conn.commit()
     conn.close()
 
-def add_diamonds(user_id, amount):
+def add_silver(user_id, amount):
     conn = get_conn()
     c = conn.cursor()
-    c.execute("UPDATE players SET diamonds = diamonds + %s WHERE user_id=%s", (amount, user_id))
+    c.execute("UPDATE players SET silver = silver + %s WHERE user_id=%s", (amount, user_id))
     conn.commit()
     conn.close()
 
-def get_diamonds(user_id):
+def get_silver(user_id):
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT diamonds FROM players WHERE user_id=%s", (user_id,))
+    c.execute("SELECT silver FROM players WHERE user_id=%s", (user_id,))
     row = c.fetchone()
     conn.close()
     return row[0] if row else 0
@@ -134,7 +137,7 @@ def clear_bets(chat_id):
 def get_top(limit=10):
     conn = get_conn()
     c = conn.cursor()
-    c.execute("SELECT name, diamonds FROM players ORDER BY diamonds DESC LIMIT %s", (limit,))
+    c.execute("SELECT name, silver FROM players ORDER BY silver DESC LIMIT %s", (limit,))
     rows = c.fetchall()
     conn.close()
     return rows
@@ -162,5 +165,3 @@ def session_reset(user_id):
     c.execute("UPDATE session_stats SET session_bet=0, session_win=0 WHERE user_id=%s", (user_id,))
     conn.commit()
     conn.close()
-
-
