@@ -9,7 +9,8 @@ import os
 import random
 import time
 from db import (init_db, get_player, update_balance, set_balance, set_last_bonus,
-    add_bet, get_bets, clear_bets, get_top, session_add_bet, session_add_win, session_reset)
+    add_bet, get_bets, clear_bets, get_top, session_add_bet, session_add_win, session_reset,
+    add_diamonds, get_diamonds, add_total_deposited)
 import traceback
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
@@ -116,27 +117,36 @@ def bet_type_keyboard():
     kb.add(InlineKeyboardButton("🎰 Крутить рулетку!", callback_data="spin"))
     return kb
 
-def amount_keyboard(bet_type):
+def amount_keyboard(bet_type, currency="gold"):
     kb = InlineKeyboardMarkup(row_width=4)
     kb.add(
-        InlineKeyboardButton("5",    callback_data=f"amt_{bet_type}_5"),
-        InlineKeyboardButton("10",   callback_data=f"amt_{bet_type}_10"),
-        InlineKeyboardButton("15",   callback_data=f"amt_{bet_type}_15"),
-        InlineKeyboardButton("25",   callback_data=f"amt_{bet_type}_25"),
+        InlineKeyboardButton("5",    callback_data=f"amt_{bet_type}_{currency}_5"),
+        InlineKeyboardButton("10",   callback_data=f"amt_{bet_type}_{currency}_10"),
+        InlineKeyboardButton("15",   callback_data=f"amt_{bet_type}_{currency}_15"),
+        InlineKeyboardButton("25",   callback_data=f"amt_{bet_type}_{currency}_25"),
     )
     kb.add(
-        InlineKeyboardButton("30",   callback_data=f"amt_{bet_type}_30"),
-        InlineKeyboardButton("50",   callback_data=f"amt_{bet_type}_50"),
-        InlineKeyboardButton("100",  callback_data=f"amt_{bet_type}_100"),
-        InlineKeyboardButton("200",  callback_data=f"amt_{bet_type}_200"),
+        InlineKeyboardButton("30",   callback_data=f"amt_{bet_type}_{currency}_30"),
+        InlineKeyboardButton("50",   callback_data=f"amt_{bet_type}_{currency}_50"),
+        InlineKeyboardButton("100",  callback_data=f"amt_{bet_type}_{currency}_100"),
+        InlineKeyboardButton("200",  callback_data=f"amt_{bet_type}_{currency}_200"),
     )
     kb.add(
-        InlineKeyboardButton("300",  callback_data=f"amt_{bet_type}_300"),
-        InlineKeyboardButton("500",  callback_data=f"amt_{bet_type}_500"),
-        InlineKeyboardButton("1000", callback_data=f"amt_{bet_type}_1000"),
-        InlineKeyboardButton("ALL IN", callback_data=f"amt_{bet_type}_allin"),
+        InlineKeyboardButton("300",  callback_data=f"amt_{bet_type}_{currency}_300"),
+        InlineKeyboardButton("500",  callback_data=f"amt_{bet_type}_{currency}_500"),
+        InlineKeyboardButton("1000", callback_data=f"amt_{bet_type}_{currency}_1000"),
+        InlineKeyboardButton("ALL IN", callback_data=f"amt_{bet_type}_{currency}_allin"),
     )
-    kb.add(InlineKeyboardButton("✏️ Ввести ставку", callback_data=f"amt_{bet_type}_custom"))
+    kb.add(InlineKeyboardButton("✏️ Ввести ставку", callback_data=f"amt_{bet_type}_{currency}_custom"))
+    kb.add(InlineKeyboardButton("Назад", callback_data=f"cur_{bet_type}_back"))
+    return kb
+
+def currency_keyboard(bet_type):
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton("🪙 Золотые", callback_data=f"cur_{bet_type}_gold"),
+        InlineKeyboardButton("💎 Алмазные", callback_data=f"cur_{bet_type}_diamond"),
+    )
     kb.add(InlineKeyboardButton("Назад", callback_data="back_to_bets"))
     return kb
 
@@ -207,16 +217,23 @@ def cb_game_mines(call):
 @bot.message_handler(func=lambda m: m.text == "💰 Баланс")
 def msg_balance(msg):
     p = get_player(msg.from_user.id, msg.from_user.first_name)
-    bot.send_message(msg.chat.id, f"💰 {p[1]}, ваш баланс: {p[2]} фишек")
+    gold = p[2]
+    diamonds = p[4] if len(p) > 4 else 0
+    total_deposited = p[5] if len(p) > 5 else 0
+    bot.send_message(msg.chat.id,
+        f"💰 {p[1]}, ваш баланс:\n\n"
+        f"🪙 Золотые: {gold} (для игры)\n"
+        f"💎 Алмазные: {diamonds} (для вывода)\n\n"
+        f"📥 Задепонировано всего: {total_deposited} / 75 🪙")
 
 @bot.message_handler(func=lambda m: m.text == "🏆 Топ игроков")
 def msg_top(msg):
     rows = get_top()
-    medals = ["🥇","🥈","🥉"]
+    medals = ["👑", "💎", "🔥", "⚡", "🌟", "✨", "💫", "🎯", "🎖️", "🏅"]
     text = "🏆 Таблица лидеров:\n\n"
     for i, (name, bal) in enumerate(rows):
-        m = medals[i] if i < 3 else f"{i+1}."
-        text += f"{m} {name} — {bal} фишек\n"
+        m = medals[i] if i < len(medals) else f"{i+1}."
+        text += f"{m} {name} — {bal} 💎\n"
     bot.send_message(msg.chat.id, text)
 
 @bot.message_handler(func=lambda m: m.text == "🎁 Бонус")
@@ -231,7 +248,7 @@ def msg_bonus(msg):
     update_balance(msg.from_user.id, bonus)
     set_last_bonus(msg.from_user.id, today)
     bot.send_message(msg.chat.id,
-        f"🎁 Ежедневный бонус!\nВы получили {bonus} фишек!\nНовый баланс: {p[2] + bonus} фишек")
+        f"🎁 Ежедневный бонус!\nВы получили {bonus} 🪙 золотых!\nНовый баланс: {p[2] + bonus} 🪙")
 
 @bot.message_handler(func=lambda m: m.text == "📖 Правила")
 def msg_rules(msg):
@@ -289,14 +306,14 @@ def cb_bet_type(call):
     bot.answer_callback_query(call.id)
     try:
         bet_type = call.data[len("bettype_"):]
-        # конвертируем обратно 118->1-18, 1936->19-36
         if bet_type == "118": bet_type = "1-18"
         if bet_type == "1936": bet_type = "19-36"
         p = get_player(call.from_user.id, call.from_user.first_name)
+        diamonds = get_diamonds(call.from_user.id)
         bot.edit_message_text(
-            f"💰 {bet_label(bet_type)}\n\nВаш баланс: {p[2]} фишек\nВыберите сумму ставки:",
+            f"💰 {bet_label(bet_type)}\n\n🪙 Золотые: {p[2]}\n💎 Алмазные: {diamonds}\n\nВыберите валюту для ставки:",
             call.message.chat.id, call.message.message_id,
-            reply_markup=amount_keyboard(bet_type))
+            reply_markup=currency_keyboard(bet_type))
     except Exception:
         traceback.print_exc()
 
@@ -307,10 +324,38 @@ def cb_number_bet(call):
     try:
         bet_type = call.data[len("num_"):]
         p = get_player(call.from_user.id, call.from_user.first_name)
+        diamonds = get_diamonds(call.from_user.id)
         bot.edit_message_text(
-            f"💰 {bet_label(bet_type)}\n\nВаш баланс: {p[2]} фишек\nВыберите сумму ставки:",
+            f"💰 {bet_label(bet_type)}\n\n🪙 Золотые: {p[2]}\n💎 Алмазные: {diamonds}\n\nВыберите валюту для ставки:",
             call.message.chat.id, call.message.message_id,
-            reply_markup=amount_keyboard(bet_type))
+            reply_markup=currency_keyboard(bet_type))
+    except Exception:
+        traceback.print_exc()
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("cur_"))
+def cb_currency(call):
+    bot.answer_callback_query(call.id)
+    try:
+        parts = call.data.split("_")
+        currency = parts[-1]
+        bet_type = "_".join(parts[1:-1])
+
+        if currency == "back":
+            bets = get_bets(call.message.chat.id)
+            bot.edit_message_text(
+                f"🎰 Рулетка — выберите тип ставки:{_bets_text(bets)}",
+                call.message.chat.id, call.message.message_id,
+                reply_markup=bet_type_keyboard())
+            return
+
+        p = get_player(call.from_user.id, call.from_user.first_name)
+        diamonds = get_diamonds(call.from_user.id)
+        cur_label = "🪙 Золотые" if currency == "gold" else "💎 Алмазные"
+        balance = p[2] if currency == "gold" else diamonds
+        bot.edit_message_text(
+            f"💰 {bet_label(bet_type)} | {cur_label}\n\nБаланс: {balance}\nВыберите сумму ставки:",
+            call.message.chat.id, call.message.message_id,
+            reply_markup=amount_keyboard(bet_type, currency))
     except Exception:
         traceback.print_exc()
 
@@ -321,35 +366,44 @@ def cb_amount(call):
     try:
         parts = call.data.split("_")
         val = parts[-1]
-        bet_type = "_".join(parts[1:-1])
+        currency = parts[-2]
+        bet_type = "_".join(parts[1:-2])
 
         if val == "custom":
-            custom_bet_waiting[call.from_user.id] = {"bet_type": bet_type, "chat_id": call.message.chat.id, "msg_id": call.message.message_id}
+            custom_bet_waiting[call.from_user.id] = {"bet_type": bet_type, "currency": currency, "chat_id": call.message.chat.id, "msg_id": call.message.message_id}
             bot.edit_message_text(
                 f"✏️ Введите сумму ставки (минимум 5):",
                 call.message.chat.id, call.message.message_id)
             return
 
         p = get_player(call.from_user.id, call.from_user.first_name)
-        amount = p[2] if val == "allin" else int(val)
+        diamonds = get_diamonds(call.from_user.id)
+        balance = p[2] if currency == "gold" else diamonds
+        amount = balance if val == "allin" else int(val)
 
         if amount < 5:
-            bot.answer_callback_query(call.id, "Минимальная ставка 5 фишек!")
+            bot.answer_callback_query(call.id, "Минимальная ставка 5!")
             return
         if amount <= 0:
-            bot.answer_callback_query(call.id, "У вас нет фишек!")
+            bot.answer_callback_query(call.id, "У вас нет средств!")
             return
-        if amount > p[2]:
-            bot.answer_callback_query(call.id, f"Недостаточно фишек! Баланс: {p[2]}")
+        if amount > balance:
+            cur_label = "🪙" if currency == "gold" else "💎"
+            bot.answer_callback_query(call.id, f"Недостаточно {cur_label}! Баланс: {balance}")
             return
 
-        update_balance(call.from_user.id, -amount)
+        if currency == "gold":
+            update_balance(call.from_user.id, -amount)
+        else:
+            add_diamonds(call.from_user.id, -amount)
+
         add_bet(call.message.chat.id, call.from_user.id, bet_type, amount)
         session_add_bet(call.from_user.id, amount)
         p_new = get_player(call.from_user.id)
+        cur_icon = "🪙" if currency == "gold" else "💎"
 
         bot.edit_message_text(
-            f"Ставка принята!\n{p_new[1]}: {amount} фишек на {bet_label(bet_type)}\nОстаток: {p_new[2]} фишек\n\nЖдём других или крутим?",
+            f"Ставка принята!\n{p_new[1]}: {amount} {cur_icon} на {bet_label(bet_type)}\n🪙 Золотых: {p_new[2]} | 💎 Алмазных: {get_diamonds(call.from_user.id)}\n\nЖдём других или крутим?",
             call.message.chat.id, call.message.message_id,
             reply_markup=after_bet_keyboard())
     except Exception:
@@ -401,10 +455,10 @@ def cb_spin(call):
             p = get_player(uid)
             if not p: continue
             if total_win > 0:
-                update_balance(uid, total_win)
-                new_bal = get_player(uid)[2]
+                add_diamonds(uid, total_win)
+                new_diamonds = get_diamonds(uid)
                 session_add_win(uid, total_win)
-                winners_text += f"🏆 {p[1]}: +{total_win} -> {new_bal} фишек\n"
+                winners_text += f"🏆 {p[1]}: +{total_win} 💎 (алмазных: {new_diamonds})\n"
             else:
                 losers_text += f"💸 {p[1]}: проиграл\n"
 
@@ -642,14 +696,14 @@ def cb_mines_open(call):
 
             if opened >= safe_total:
                 # Все безопасные клетки открыты — автовыигрыш
-                update_balance(uid, potential)
-                p = get_player(uid)
+                add_diamonds(uid, potential)
+                new_diamonds = get_diamonds(uid)
                 game["active"] = False
                 del mines_games[uid]
                 kb = InlineKeyboardMarkup()
                 kb.add(InlineKeyboardButton("🎮 Играть снова", callback_data="mines_restart"))
                 bot.edit_message_text(
-                    f"🎉 Вы открыли все клетки! Выигрыш: {potential} фишек!\nБаланс: {p[2]} фишек",
+                    f"🎉 Вы открыли все клетки! Выигрыш: {potential} 💎\nАлмазных на балансе: {new_diamonds} 💎",
                     call.message.chat.id, call.message.message_id,
                     reply_markup=kb)
             else:
@@ -679,16 +733,16 @@ def cb_mines_cashout(call):
 
         mult = mines_multiplier(game["size"], game["mines_count"], opened)
         win = int(game["bet"] * mult)
-        update_balance(uid, win)
+        add_diamonds(uid, win)
+        new_diamonds = get_diamonds(uid)
         session_add_win(uid, win)
-        p = get_player(uid)
         game["active"] = False
         del mines_games[uid]
 
         kb = InlineKeyboardMarkup()
         kb.add(InlineKeyboardButton("🎮 Играть снова", callback_data="mines_restart"))
         bot.edit_message_text(
-            f"💰 Вы забрали выигрыш!\nСтавка: {game['bet']} | Множитель: x{mult} | Выигрыш: {win} фишек\nБаланс: {p[2]} фишек",
+            f"💰 Вы забрали выигрыш!\nСтавка: {game['bet']} 🪙 | Множитель: x{mult} | Выигрыш: {win} 💎\nАлмазных: {new_diamonds} 💎",
             call.message.chat.id, call.message.message_id,
             reply_markup=kb)
     except Exception:
@@ -710,6 +764,7 @@ def cb_mines_restart(call):
 def msg_custom_bet(msg):
     uid = msg.from_user.id
     data = custom_bet_waiting.pop(uid)
+    currency = data.get("currency", "gold")
     try:
         amount = int(msg.text.strip())
     except ValueError:
@@ -718,17 +773,23 @@ def msg_custom_bet(msg):
         return
 
     if amount < 5:
-        bot.send_message(msg.chat.id, "Минимальная ставка 5 фишек!")
+        bot.send_message(msg.chat.id, "Минимальная ставка 5!")
         custom_bet_waiting[uid] = data
         return
 
     p = get_player(uid, msg.from_user.first_name)
-    if amount > p[2]:
-        bot.send_message(msg.chat.id, f"Недостаточно фишек! Баланс: {p[2]}")
+    diamonds = get_diamonds(uid)
+    balance = p[2] if currency == "gold" else diamonds
+    if amount > balance:
+        cur_icon = "🪙" if currency == "gold" else "💎"
+        bot.send_message(msg.chat.id, f"Недостаточно {cur_icon}! Баланс: {balance}")
         custom_bet_waiting[uid] = data
         return
 
-    update_balance(uid, -amount)
+    if currency == "gold":
+        update_balance(uid, -amount)
+    else:
+        add_diamonds(uid, -amount)
     session_add_bet(uid, amount)
 
     if data.get("is_mines"):
@@ -758,15 +819,15 @@ custom_deposit_waiting = set()  # user_id ожидающих ввода сумм
 def deposit_keyboard():
     kb = InlineKeyboardMarkup(row_width=2)
     kb.add(
-        InlineKeyboardButton("15 ⭐ = 15 фишек",    callback_data="deposit_15"),
-        InlineKeyboardButton("50 ⭐ = 50 фишек",    callback_data="deposit_50"),
+        InlineKeyboardButton("15 ⭐ = 15 🪙",    callback_data="deposit_15"),
+        InlineKeyboardButton("50 ⭐ = 50 🪙",    callback_data="deposit_50"),
     )
     kb.add(
-        InlineKeyboardButton("100 ⭐ = 100 фишек",  callback_data="deposit_100"),
-        InlineKeyboardButton("500 ⭐ = 500 фишек",  callback_data="deposit_500"),
+        InlineKeyboardButton("100 ⭐ = 100 🪙",  callback_data="deposit_100"),
+        InlineKeyboardButton("500 ⭐ = 500 🪙",  callback_data="deposit_500"),
     )
     kb.add(
-        InlineKeyboardButton("1000 ⭐ = 1000 фишек", callback_data="deposit_1000"),
+        InlineKeyboardButton("1000 ⭐ = 1000 🪙", callback_data="deposit_1000"),
         InlineKeyboardButton("✏️ Ввести сумму",      callback_data="deposit_custom"),
     )
     return kb
@@ -775,7 +836,7 @@ def deposit_keyboard():
 def msg_deposit(msg):
     get_player(msg.from_user.id, msg.from_user.first_name)
     bot.send_message(msg.chat.id,
-        "💳 Пополнение баланса\n\n1 ⭐ Telegram Star = 1 фишка\n\nВыберите сумму:",
+        "💳 Пополнение баланса\n\n1 ⭐ Telegram Star = 1 🪙 золотая\nЗолотые используются для игры.\n\nВыберите сумму:",
         reply_markup=deposit_keyboard())
 
 @bot.callback_query_handler(func=lambda c: c.data == "deposit_custom")
@@ -835,13 +896,18 @@ def successful_payment(msg):
         user_id = int(parts[1])
         amount = int(parts[2])
         update_balance(user_id, amount)
+        add_total_deposited(user_id, amount)
         p = get_player(user_id)
+        total_dep = p[5] if len(p) > 5 else amount
         bot.send_message(msg.chat.id,
-            f"✅ Оплата прошла успешно!\n+{amount} фишек зачислено на баланс.\n💰 Текущий баланс: {p[2]} фишек")
+            f"✅ Оплата прошла успешно!\n+{amount} 🪙 золотых зачислено на баланс.\n🪙 Текущий баланс: {p[2]} золотых\n\n📥 Задепонировано всего: {total_dep} / 75 🪙")
     except Exception:
         traceback.print_exc()
 
-
+@bot.callback_query_handler(func=lambda c: True)
+def cb_catch_all(call):
+    print(f"[DEBUG] ЛЮБОЙ CALLBACK: {call.data}")
+    bot.answer_callback_query(call.id, f"Получено: {call.data}")
 
 
 # =================== ВЫВОД ===================
@@ -872,8 +938,15 @@ def msg_withdraw(msg):
     p = get_player(msg.from_user.id, msg.from_user.first_name)
     if not p:
         return
+    diamonds = get_diamonds(msg.from_user.id)
+    total_deposited = p[5] if len(p) > 5 else 0
+    if total_deposited < 75:
+        bot.send_message(msg.chat.id,
+            f"❌ Вывод недоступен!\n\nДля вывода нужно пополнить баланс минимум на 75 🪙 за всё время.\n"
+            f"Ваш прогресс: {total_deposited} / 75 🪙")
+        return
     bot.send_message(msg.chat.id,
-        f"💸 Вывод фишек\n\n1 фишка = 1 ⭐ Telegram Star\nВаш баланс: {p[2]} фишек\nМинимум для вывода: {MIN_WITHDRAW} фишек\n\nВыберите сумму:",
+        f"💸 Вывод алмазных\n\n1 💎 = 1 ⭐ Telegram Star\nВаш баланс: {diamonds} 💎\nМинимум для вывода: {MIN_WITHDRAW} 💎\n\nВыберите сумму:",
         reply_markup=withdraw_keyboard())
 
 @bot.callback_query_handler(func=lambda c: c.data == "withdraw_custom")
@@ -908,22 +981,29 @@ def _process_withdraw(chat_id, user_id, user, amount):
     p = get_player(user_id)
     if not p:
         return
-    if amount < MIN_WITHDRAW:
-        bot.send_message(chat_id, f"Минимальная сумма вывода: {MIN_WITHDRAW} фишек!")
+    total_deposited = p[5] if len(p) > 5 else 0
+    if total_deposited < 75:
+        bot.send_message(chat_id,
+            f"❌ Вывод недоступен!\n\nДля вывода нужно пополнить баланс минимум на 75 🪙 за всё время.\n"
+            f"Ваш прогресс: {total_deposited} / 75 🪙")
         return
-    if amount > p[2]:
-        bot.send_message(chat_id, f"Недостаточно фишек! Ваш баланс: {p[2]}")
+    diamonds = get_diamonds(user_id)
+    if amount < MIN_WITHDRAW:
+        bot.send_message(chat_id, f"Минимальная сумма вывода: {MIN_WITHDRAW} 💎!")
+        return
+    if amount > diamonds:
+        bot.send_message(chat_id, f"Недостаточно алмазных! У вас: {diamonds} 💎")
         return
 
-    # Списываем фишки
-    update_balance(user_id, -amount)
-    p_new = get_player(user_id)
+    # Списываем алмазные
+    add_diamonds(user_id, -amount)
+    new_diamonds = get_diamonds(user_id)
 
     username = f"@{user.username}" if user.username else f"ID: {user_id}"
 
     # Уведомляем игрока
     bot.send_message(chat_id,
-        f"✅ Заявка на вывод принята!\n💸 Сумма: {amount} фишек = {amount} ⭐\nОжидайте, администратор отправит Stars в ближайшее время.\n\n💰 Остаток на балансе: {p_new[2]} фишек")
+        f"✅ Заявка на вывод принята!\n💸 Сумма: {amount} 💎 = {amount} ⭐\nОжидайте, администратор отправит Stars в ближайшее время.\n\n💎 Остаток алмазных: {new_diamonds}")
 
     # Уведомляем всех админов через админ-бот
     admin_bot = telebot.TeleBot(os.environ.get("ADMIN_BOT_TOKEN"))
@@ -967,8 +1047,8 @@ def cb_wadmin_reject(call):
         parts = call.data.split("_")
         user_id = int(parts[2])
         amount = int(parts[3])
-        # Возвращаем фишки
-        update_balance(user_id, amount)
+        # Возвращаем алмазные
+        add_diamonds(user_id, amount)
         p = get_player(user_id)
         name = p[1] if p else str(user_id)
         bot.edit_message_text(
@@ -987,4 +1067,3 @@ if __name__ == "__main__":
     init_db()
     print("🎰 Бот запущен! Нажмите Ctrl+C для остановки.")
     bot.infinity_polling()
-
