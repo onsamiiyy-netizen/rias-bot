@@ -841,10 +841,7 @@ def successful_payment(msg):
     except Exception:
         traceback.print_exc()
 
-@bot.callback_query_handler(func=lambda c: True)
-def cb_catch_all(call):
-    print(f"[DEBUG] ЛЮБОЙ CALLBACK: {call.data}")
-    bot.answer_callback_query(call.id, f"Получено: {call.data}")
+
 
 
 # =================== ВЫВОД ===================
@@ -990,3 +987,4 @@ if __name__ == "__main__":
     init_db()
     print("🎰 Бот запущен! Нажмите Ctrl+C для остановки.")
     bot.infinity_polling()
+
