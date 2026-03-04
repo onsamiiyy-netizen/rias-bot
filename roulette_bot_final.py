@@ -481,8 +481,28 @@ def cb_spin(call):
 mines_games = {}
 custom_bet_waiting = {}  # {user_id: bet_type}
 
+MINES_TABLES = {
+    3: {  # 3x3
+        1: [1.05, 1.26, 1.46, 1.67, 1.88, 2.09, 2.29, 2.5],
+        2: [1.15, 1.41, 1.67, 1.93, 2.18, 2.44, 2.7],
+        3: [1.2, 1.66, 2.12, 2.58, 3.04, 3.5],
+    },
+    5: {  # 5x5
+        3:  [1.05, 1.11, 1.17, 1.23, 1.29, 1.35, 1.41, 1.47, 1.53, 1.59, 1.65, 1.7, 1.76, 1.82, 1.88, 1.94, 2.0, 2.06, 2.12, 2.18, 2.24, 2.3],
+        5:  [1.1, 1.18, 1.27, 1.35, 1.44, 1.52, 1.61, 1.69, 1.77, 1.86, 1.94, 2.03, 2.11, 2.19, 2.28, 2.36, 2.45, 2.53, 2.62, 2.7],
+        10: [1.15, 1.32, 1.49, 1.65, 1.82, 1.99, 2.16, 2.33, 2.49, 2.66, 2.83, 3.0, 3.16, 3.33, 3.5],
+    },
+}
+
 def mines_multiplier(size, mines_count, opened):
-    """Рассчитывает текущий множитель"""
+    """Возвращает множитель из кастомной таблицы"""
+    if opened == 0:
+        return 1.0
+    table = MINES_TABLES.get(size, {}).get(mines_count)
+    if table:
+        idx = min(opened - 1, len(table) - 1)
+        return table[idx]
+    # Фолбэк для нестандартных настроек
     total = size * size
     safe = total - mines_count
     multiplier = 1.0
@@ -492,7 +512,7 @@ def mines_multiplier(size, mines_count, opened):
         if safe_remaining <= 0 or remaining <= 0:
             break
         multiplier *= remaining / safe_remaining
-    return round(multiplier * 0.97, 2)  # 3% комиссия казино
+    return round(multiplier * 0.97, 2)
 
 def mines_grid_keyboard(user_id):
     game = mines_games[user_id]
