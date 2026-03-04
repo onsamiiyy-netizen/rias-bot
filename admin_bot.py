@@ -4,12 +4,13 @@
 """
 
 import telebot
+import os
 from db import get_player, update_balance
 import traceback
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ===================== НАСТРОЙКИ =====================
-ADMIN_BOT_TOKEN = "8653014691:AAEsJl9wSf8A3A6WgXDjYO3A-wngva0pTP0"
+ADMIN_BOT_TOKEN = os.environ.get("ADMIN_BOT_TOKEN")
 SECRET_CODE = "rias2024admin"  # секретный код для входа — измени на свой
 # =====================================================
 
@@ -65,7 +66,7 @@ def cb_done(call):
             call.message.chat.id, call.message.message_id)
         try:
             # Уведомляем игрока через основной бот
-            main_bot = telebot.TeleBot("8722611910:AAE9HtgKx8ef-v8tpXDhaUsqzW-Vscl274U")
+            main_bot = telebot.TeleBot(os.environ.get("BOT_TOKEN"))
             main_bot.send_message(user_id, f"✅ Ваш вывод выполнен!\n💫 {amount} ⭐ Telegram Stars отправлены.")
         except Exception:
             pass
@@ -89,7 +90,7 @@ def cb_reject(call):
             f"❌ Отклонено.\n{name} — {amount} фишек возвращены.",
             call.message.chat.id, call.message.message_id)
         try:
-            main_bot = telebot.TeleBot("8722611910:AAE9HtgKx8ef-v8tpXDhaUsqzW-Vscl274U")
+            main_bot = telebot.TeleBot(os.environ.get("BOT_TOKEN"))
             main_bot.send_message(user_id, f"❌ Заявка на вывод отклонена.\n💰 {amount} фишек возвращены на баланс.")
         except Exception:
             pass

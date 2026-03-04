@@ -5,6 +5,7 @@
 """
 
 import telebot
+import os
 import random
 import time
 from db import (init_db, get_player, update_balance, set_balance, set_last_bonus,
@@ -13,7 +14,7 @@ import traceback
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 # ===================== НАСТРОЙКИ =====================
-BOT_TOKEN = "8722611910:AAE9HtgKx8ef-v8tpXDhaUsqzW-Vscl274U"
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 # =====================================================
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -928,7 +929,7 @@ def _process_withdraw(chat_id, user_id, user, amount):
         f"✅ Заявка на вывод принята!\n💸 Сумма: {amount} фишек = {amount} ⭐\nОжидайте, администратор отправит Stars в ближайшее время.\n\n💰 Остаток на балансе: {p_new[2]} фишек")
 
     # Уведомляем всех админов через админ-бот
-    admin_bot = telebot.TeleBot("8653014691:AAEsJl9wSf8A3A6WgXDjYO3A-wngva0pTP0")
+    admin_bot = telebot.TeleBot(os.environ.get("ADMIN_BOT_TOKEN"))
     admin_kb = InlineKeyboardMarkup()
     admin_kb.add(
         InlineKeyboardButton("✅ Выполнено", callback_data=f"wadmin_done_{user_id}_{amount}"),
