@@ -11,13 +11,19 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ===================== НАСТРОЙКИ =====================
 ADMIN_BOT_TOKEN = os.environ.get("ADMIN_BOT_TOKEN")
-SECRET_CODE = "rias2024admin"  # секретный код для входа — измени на свой
+SECRET_CODE = "rias2024admin"  # секретный код для входа
+
+# ⬇️ ВАЖНО: впиши сюда свой Telegram ID (число) чтобы не терять доступ после рестарта бота
+# Узнать свой ID можно написав @userinfobot в Telegram
+# Пример: PERMANENT_ADMINS = {123456789, 987654321}
+PERMANENT_ADMINS = {5320984663, 7927948775}  # ← твои ID уже здесь (из оригинального кода)
 # =====================================================
 
 bot = telebot.TeleBot(ADMIN_BOT_TOKEN)
 
-# Авторизованные админы (кто вошёл по ссылке)
-authorized_admins = set()
+# Авторизованные админы (сессионные + постоянные)
+# PERMANENT_ADMINS всегда имеют доступ даже после рестарта
+authorized_admins = set(PERMANENT_ADMINS)
 
 # =================== КОМАНДЫ ===================
 
@@ -27,7 +33,31 @@ def cmd_start(msg):
     if len(parts) > 1 and parts[1] == SECRET_CODE:
         authorized_admins.add(msg.from_user.id)
         bot.send_message(msg.chat.id,
-            "🔐 Доступ разрешён!\n\nДобро пожаловать в админ-панель.\n\nЗдесь будут приходить заявки на вывод от игроков.")
+            "🔐 <b>Доступ разрешён!</b>\n\n"
+            "Добро пожаловать в админ-панель казино.\n\n"
+            "📋 <b>Доступные команды:</b>\n\n"
+            "📊 <b>Статистика</b>\n"
+            "/stats — общая статистика (игроки, балансы)\n\n"
+            "🎟 <b>Обычные промокоды</b> (фишки сразу)\n"
+            "/newpromo КОД серебро золото активаций\n"
+            "Пример: /newpromo SUMMER 200 0 50\n"
+            "→ код SUMMER даёт 200 ⚪, работает 50 раз\n\n"
+            "💹 <b>Депозит-промокоды</b> (бонус к пополнению)\n"
+            "/newdepositpromo КОД процент активаций\n"
+            "Пример: /newdepositpromo BONUS50 50 100\n"
+            "→ код BONUS50 даёт +50% к следующему депозиту\n\n"
+            "📋 /promos — список всех промокодов\n"
+            "🗑 /delpromo КОД — удалить промокод\n\n"
+            "💸 <b>Заявки на вывод</b>\n"
+            "Приходят сюда автоматически когда игрок запрашивает вывод.\n"
+            "Нажми ✅ Выполнено или ❌ Отклонить на каждой заявке.",
+            parse_mode="HTML")
+    elif msg.from_user.id in PERMANENT_ADMINS:
+        # Постоянный админ написал /start без кода — просто показываем меню
+        bot.send_message(msg.chat.id,
+            "🔐 <b>Админ-панель</b>\n\n"
+            "Введи /start " + SECRET_CODE + " чтобы увидеть список команд.",
+            parse_mode="HTML")
     else:
         bot.send_message(msg.chat.id, "⛔ Доступ запрещён.")
 
