@@ -10,12 +10,17 @@ import random
 import time
 from db import (init_db, get_player, update_balance, set_balance, set_last_bonus,
     add_bet, get_bets, clear_bets, get_top, session_add_bet, session_add_win, session_reset,
-    add_silver, get_silver, add_total_deposited)
+    add_silver, get_silver, add_total_deposited, use_promo,
+    get_active_deposit_promo, consume_deposit_promo,
+    get_subscribed, set_subscribed)
 import traceback
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 # ===================== НАСТРОЙКИ =====================
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
+# ID или @username канала для обязательной подписки
+REQUIRED_CHANNEL = os.environ.get("REQUIRED_CHANNEL", "@RiasChanel")
+SUBSCRIBE_BONUS = 15  # серебряных за подписку
 # =====================================================
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -94,6 +99,7 @@ def main_keyboard():
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
     kb.row(KeyboardButton("🎰 Играть"), KeyboardButton("💰 Баланс"))
     kb.row(KeyboardButton("🎁 Бонус"), KeyboardButton("🏆 Топ игроков"))
+    kb.row(KeyboardButton("📋 Задания"), KeyboardButton("🎟 Промокод"))
     kb.row(KeyboardButton("📖 Правила"))
     kb.row(KeyboardButton("💳 Пополнить"), KeyboardButton("💸 Вывести"))
     return kb
@@ -832,6 +838,157 @@ def msg_custom_bet(msg):
             reply_markup=after_bet_keyboard())
 
 
+# =================== ЗАДАНИЯ ===================
+
+def tasks_keyboard(already_subscribed):
+    kb = InlineKeyboardMarkup()
+    if already_subscribed:
+        kb.add(InlineKeyboardButton("✅ Выполнено", callback_data="task_done"))
+    else:
+        kb.add(InlineKeyboardButton(f"📢 Подписаться на канал", url=f"https://t.me/{REQUIRED_CHANNEL.lstrip('@')}"))
+        kb.add(InlineKeyboardButton("✔️ Проверить подписку", callback_data="task_check_sub"))
+    return kb
+
+def _sub_status_text(already_subscribed):
+    if already_subscribed:
+        return (
+            "📋 <b>Задания</b>\n\n"
+            "✅ <b>Подписка на канал</b> — выполнено!\n"
+            f"Награда: +{SUBSCRIBE_BONUS} ⚪ серебряных — уже получена."
+        )
+    return (
+        "📋 <b>Задания</b>\n\n"
+        f"📢 <b>Подписаться на канал</b> {REQUIRED_CHANNEL}\n"
+        f"Награда: +{SUBSCRIBE_BONUS} ⚪ серебряных\n\n"
+        "Подпишись и нажми «Проверить подписку» — бонус придёт автоматически."
+    )
+
+@bot.message_handler(func=lambda m: m.text == "📋 Задания")
+def msg_tasks(msg):
+    get_player(msg.from_user.id, msg.from_user.first_name)
+    already = get_subscribed(msg.from_user.id)
+    bot.send_message(msg.chat.id,
+        _sub_status_text(already),
+        parse_mode="HTML",
+        reply_markup=tasks_keyboard(already))
+
+@bot.callback_query_handler(func=lambda c: c.data == "task_check_sub")
+def cb_task_check_sub(call):
+    bot.answer_callback_query(call.id)
+    uid = call.from_user.id
+
+    # Проверяем через getChatMember
+    try:
+        member = bot.get_chat_member(REQUIRED_CHANNEL, uid)
+        is_member = member.status in ("member", "administrator", "creator")
+    except Exception:
+        is_member = False
+
+    if not is_member:
+        bot.answer_callback_query(call.id, "❌ Вы ещё не подписаны!", show_alert=True)
+        try:
+            bot.edit_message_text(
+                _sub_status_text(False),
+                call.message.chat.id, call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=tasks_keyboard(False))
+        except Exception:
+            pass
+        return
+
+    # Подписан — проверяем не получал ли уже бонус
+    already = get_subscribed(uid)
+    if already:
+        bot.answer_callback_query(call.id, "Бонус уже был получен ранее.", show_alert=True)
+        try:
+            bot.edit_message_text(
+                _sub_status_text(True),
+                call.message.chat.id, call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=tasks_keyboard(True))
+        except Exception:
+            pass
+        return
+
+    # Выдаём бонус
+    set_subscribed(uid)
+    update_balance(uid, SUBSCRIBE_BONUS)
+    p = get_player(uid)
+    bot.answer_callback_query(call.id, f"✅ +{SUBSCRIBE_BONUS} серебряных!", show_alert=True)
+    try:
+        bot.edit_message_text(
+            f"📋 <b>Задания</b>\n\n"
+            f"✅ <b>Подписка на канал</b> — выполнено!\n"
+            f"🎁 Начислено: +{SUBSCRIBE_BONUS} ⚪ серебряных\n"
+            f"⚪ Баланс: {p[2]} серебряных",
+            call.message.chat.id, call.message.message_id,
+            parse_mode="HTML",
+            reply_markup=tasks_keyboard(True))
+    except Exception:
+        pass
+
+@bot.callback_query_handler(func=lambda c: c.data == "task_done")
+def cb_task_done(call):
+    bot.answer_callback_query(call.id, "Задание уже выполнено ✅")
+
+# =================== ПРОМОКОДЫ ===================
+
+promo_waiting = set()  # user_id ожидающих ввода промокода
+
+@bot.message_handler(func=lambda m: m.text == "🎟 Промокод")
+def msg_promo(msg):
+    get_player(msg.from_user.id, msg.from_user.first_name)
+    promo_waiting.add(msg.from_user.id)
+    bot.send_message(msg.chat.id,
+        "🎟 Введите промокод:\n\n(Промокоды чувствительны к РЕГИСТРУ — вводи заглавными буквами)")
+
+@bot.message_handler(commands=["promo"])
+def cmd_promo(msg):
+    get_player(msg.from_user.id, msg.from_user.first_name)
+    parts = msg.text.split(maxsplit=1)
+    if len(parts) < 2:
+        promo_waiting.add(msg.from_user.id)
+        bot.send_message(msg.chat.id, "🎟 Введите промокод:")
+        return
+    _activate_promo(msg.chat.id, msg.from_user.id, parts[1].strip().upper())
+
+@bot.message_handler(func=lambda m: m.from_user.id in promo_waiting)
+def msg_promo_input(msg):
+    uid = msg.from_user.id
+    promo_waiting.discard(uid)
+    _activate_promo(msg.chat.id, uid, msg.text.strip().upper())
+
+def _activate_promo(chat_id, user_id, code):
+    status, val1, val2 = use_promo(code, user_id)
+    if status == 'not_found':
+        bot.send_message(chat_id, "❌ Промокод не найден. Проверь правильность написания.")
+    elif status == 'already_used':
+        bot.send_message(chat_id, "⚠️ Вы уже активировали этот промокод.")
+    elif status == 'limit':
+        bot.send_message(chat_id, "😔 Этот промокод уже не действует — лимит активаций исчерпан.")
+    elif status == 'ok_deposit':
+        percent = val1
+        bot.send_message(chat_id,
+            f"✅ Промокод <b>{code}</b> активирован!\n\n"
+            f"💹 Бонус: <b>+{percent}%</b> к следующему пополнению\n\n"
+            f"Сделайте пополнение через 💳 Пополнить — бонус начислится автоматически и промо сгорит.",
+            parse_mode="HTML")
+    elif status == 'ok':
+        silver, gold = val1, val2
+        parts_desc = []
+        if silver: parts_desc.append(f"+{silver} ⚪ серебряных")
+        if gold:   parts_desc.append(f"+{gold} 🟡 золотых")
+        reward_text = " и ".join(parts_desc) if parts_desc else "0 фишек"
+        p = get_player(user_id)
+        silver_bal = p[2] if p else 0
+        gold_bal = get_silver(user_id)
+        bot.send_message(chat_id,
+            f"✅ Промокод <b>{code}</b> активирован!\n\n"
+            f"💰 Начислено: {reward_text}\n\n"
+            f"⚪ Серебряных: {silver_bal}\n"
+            f"🟡 Золотых: {gold_bal}",
+            parse_mode="HTML")
+
 # =================== ПОПОЛНЕНИЕ (TELEGRAM STARS) ===================
 
 custom_deposit_waiting = set()  # user_id ожидающих ввода суммы
@@ -917,10 +1074,24 @@ def successful_payment(msg):
         amount = int(parts[2])
         update_balance(user_id, amount)
         add_total_deposited(user_id, amount)
+
+        # Проверяем активный депозит-промо
+        bonus_amount = 0
+        bonus_text = ""
+        percent = consume_deposit_promo(user_id)
+        if percent > 0:
+            bonus_amount = int(amount * percent / 100)
+            update_balance(user_id, bonus_amount)
+            bonus_text = f"\n🎁 Бонус по промокоду +{percent}%: <b>+{bonus_amount} ⚪</b>"
+
         p = get_player(user_id)
         total_dep = p[5] if len(p) > 5 else amount
         bot.send_message(msg.chat.id,
-            f"✅ Оплата прошла успешно!\n+{amount} ⚪ золотых зачислено на баланс.\n🟡 Текущий баланс: {p[2]} золотых\n\n📥 Задепонировано всего: {total_dep} / 75 🟡")
+            f"✅ Оплата прошла успешно!\n"
+            f"+{amount} ⚪ зачислено на баланс.{bonus_text}\n"
+            f"⚪ Текущий баланс: {p[2]}\n\n"
+            f"📥 Задепонировано всего: {total_dep} / 75 🟡",
+            parse_mode="HTML")
     except Exception:
         traceback.print_exc()
 
