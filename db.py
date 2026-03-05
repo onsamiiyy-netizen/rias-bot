@@ -51,9 +51,23 @@ def init_db():
     """)
     conn.commit()
     conn.close()
-    conn.close()
     init_promos()
     print("✅ БД инициализирована")
+
+def add_silver(user_id, amount):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("UPDATE players SET diamonds = diamonds + %s WHERE user_id=%s", (amount, user_id))
+    conn.commit()
+    conn.close()
+
+def get_silver(user_id):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT diamonds FROM players WHERE user_id=%s", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else 0
 
 def get_player(user_id, name=None):
     conn = get_conn()
