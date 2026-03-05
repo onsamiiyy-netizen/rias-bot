@@ -340,4 +340,3 @@ def session_reset(user_id):
     c.execute("UPDATE session_stats SET session_bet=0, session_win=0 WHERE user_id=%s", (user_id,))
     conn.commit()
     conn.close()
-
