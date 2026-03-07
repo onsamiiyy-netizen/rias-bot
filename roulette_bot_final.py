@@ -14,6 +14,20 @@ from db import (init_db, get_player, update_balance, set_balance, set_last_bonus
     get_active_deposit_promo, consume_deposit_promo,
     get_subscribed, set_subscribed, apply_referral, get_referral_count)
 import traceback
+
+# Патч: глушим неважную ошибку "message is not modified"
+_original_print_exc = traceback.print_exc
+def _filtered_print_exc(*args, **kwargs):
+    import sys
+    import io
+    buf = io.StringIO()
+    import traceback as _tb
+    _tb.print_exc(file=buf)
+    s = buf.getvalue()
+    if "message is not modified" not in s and "Bad Request: query is too old" not in s:
+        print(s, end='', file=sys.stderr)
+traceback.print_exc = _filtered_print_exc
+
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 # ===================== НАСТРОЙКИ =====================
@@ -25,6 +39,14 @@ REFERRAL_BONUS = 15   # серебряных рефереру и новичку
 # =====================================================
 
 bot = telebot.TeleBot(BOT_TOKEN)
+
+def safe_edit(chat_id, message_id, text, **kwargs):
+    """Редактирует сообщение, игнорируя ошибку 'message is not modified'"""
+    try:
+        bot.edit_message_text(text, chat_id, message_id, **kwargs)
+    except Exception as e:
+        if "message is not modified" not in str(e):
+            traceback.print_exc()
 
 STARTING_BALANCE = 0
 
@@ -506,7 +528,7 @@ def cb_spin(call):
         if losers_text:  text += f"Проигравшие:\n{losers_text}\n"
         text += "\n🎰 Новый раунд!"
 
-        bot.edit_message_text(text, call.message.chat.id, call.message.message_id,
+        safe_edit(call.message.chat.id, call.message.message_id, text,
             reply_markup=new_round_keyboard())
     except Exception:
         traceback.print_exc()
@@ -654,7 +676,7 @@ def cb_mines_bet(call):
 
         if val == "custom":
             custom_bet_waiting[call.from_user.id] = {"bet_type": f"mines_{size}_{mines_count}", "chat_id": call.message.chat.id, "msg_id": call.message.message_id, "is_mines": True, "size": size, "mines_count": mines_count}
-            bot.edit_message_text("✏️ Введите сумму ставки (минимум 5):", call.message.chat.id, call.message.message_id)
+            safe_edit(call.message.chat.id, call.message.message_id, "✏️ Введите сумму ставки (минимум 5):")
             return
 
         p = get_player(call.from_user.id, call.from_user.first_name)
