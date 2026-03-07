@@ -607,27 +607,36 @@ def mines_count_keyboard(size):
     kb.add(*buttons)
     return kb
 
-def mines_bet_keyboard(size, mines_count):
+def mines_currency_keyboard(size, mines_count):
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton("⚪ Серебряные", callback_data=f"mines_cur_{size}_{mines_count}_silver"),
+        InlineKeyboardButton("🟡 Золотые",    callback_data=f"mines_cur_{size}_{mines_count}_gold"),
+    )
+    return kb
+
+def mines_bet_keyboard(size, mines_count, currency="silver"):
     kb = InlineKeyboardMarkup(row_width=4)
     kb.add(
-        InlineKeyboardButton("5",    callback_data=f"mines_bet_{size}_{mines_count}_5"),
-        InlineKeyboardButton("10",   callback_data=f"mines_bet_{size}_{mines_count}_10"),
-        InlineKeyboardButton("15",   callback_data=f"mines_bet_{size}_{mines_count}_15"),
-        InlineKeyboardButton("25",   callback_data=f"mines_bet_{size}_{mines_count}_25"),
+        InlineKeyboardButton("5",    callback_data=f"mines_bet_{size}_{mines_count}_{currency}_5"),
+        InlineKeyboardButton("10",   callback_data=f"mines_bet_{size}_{mines_count}_{currency}_10"),
+        InlineKeyboardButton("15",   callback_data=f"mines_bet_{size}_{mines_count}_{currency}_15"),
+        InlineKeyboardButton("25",   callback_data=f"mines_bet_{size}_{mines_count}_{currency}_25"),
     )
     kb.add(
-        InlineKeyboardButton("30",   callback_data=f"mines_bet_{size}_{mines_count}_30"),
-        InlineKeyboardButton("50",   callback_data=f"mines_bet_{size}_{mines_count}_50"),
-        InlineKeyboardButton("100",  callback_data=f"mines_bet_{size}_{mines_count}_100"),
-        InlineKeyboardButton("200",  callback_data=f"mines_bet_{size}_{mines_count}_200"),
+        InlineKeyboardButton("30",   callback_data=f"mines_bet_{size}_{mines_count}_{currency}_30"),
+        InlineKeyboardButton("50",   callback_data=f"mines_bet_{size}_{mines_count}_{currency}_50"),
+        InlineKeyboardButton("100",  callback_data=f"mines_bet_{size}_{mines_count}_{currency}_100"),
+        InlineKeyboardButton("200",  callback_data=f"mines_bet_{size}_{mines_count}_{currency}_200"),
     )
     kb.add(
-        InlineKeyboardButton("300",  callback_data=f"mines_bet_{size}_{mines_count}_300"),
-        InlineKeyboardButton("500",  callback_data=f"mines_bet_{size}_{mines_count}_500"),
-        InlineKeyboardButton("1000", callback_data=f"mines_bet_{size}_{mines_count}_1000"),
-        InlineKeyboardButton("ALL IN", callback_data=f"mines_bet_{size}_{mines_count}_allin"),
+        InlineKeyboardButton("300",  callback_data=f"mines_bet_{size}_{mines_count}_{currency}_300"),
+        InlineKeyboardButton("500",  callback_data=f"mines_bet_{size}_{mines_count}_{currency}_500"),
+        InlineKeyboardButton("1000", callback_data=f"mines_bet_{size}_{mines_count}_{currency}_1000"),
+        InlineKeyboardButton("ALL IN", callback_data=f"mines_bet_{size}_{mines_count}_{currency}_allin"),
     )
-    kb.add(InlineKeyboardButton("✏️ Ввести ставку", callback_data=f"mines_bet_{size}_{mines_count}_custom"))
+    kb.add(InlineKeyboardButton("✏️ Ввести ставку", callback_data=f"mines_bet_{size}_{mines_count}_{currency}_custom"))
+    kb.add(InlineKeyboardButton("◀️ Назад", callback_data=f"mines_back_cur_{size}_{mines_count}"))
     return kb
 
 # --- Хендлеры мин ---
@@ -658,41 +667,100 @@ def cb_mines_count(call):
         parts = call.data.split("_")
         size = int(parts[2])
         mines_count = int(parts[3])
+        p = get_player(call.from_user.id, call.from_user.first_name)
+        silver = p[2]
+        gold = get_silver(call.from_user.id)
         bot.edit_message_text(
-            f"💣 Поле {size}x{size} | Мин: {mines_count}\n\nВыберите ставку:",
+            f"💣 Поле {size}x{size} | Мин: {mines_count}\n\n⚪ Серебряных: {silver}\n🟡 Золотых: {gold}\n\nВыберите валюту для ставки:",
             call.message.chat.id, call.message.message_id,
-            reply_markup=mines_bet_keyboard(size, mines_count))
+            reply_markup=mines_currency_keyboard(size, mines_count))
     except Exception:
         traceback.print_exc()
 
-@bot.callback_query_handler(func=lambda c: c.data.startswith("mines_bet_"))
-def cb_mines_bet(call):
+@bot.callback_query_handler(func=lambda c: c.data.startswith("mines_cur_"))
+def cb_mines_currency(call):
     bot.answer_callback_query(call.id)
     try:
         parts = call.data.split("_")
         size = int(parts[2])
         mines_count = int(parts[3])
-        val = parts[4]
+        currency = parts[4]
+        p = get_player(call.from_user.id, call.from_user.first_name)
+        silver = p[2]
+        gold = get_silver(call.from_user.id)
+        cur_label = "⚪ Серебряные" if currency == "silver" else "🟡 Золотые"
+        balance = silver if currency == "silver" else gold
+        bot.edit_message_text(
+            f"💣 Поле {size}x{size} | Мин: {mines_count} | {cur_label}\n\nБаланс: {balance}\nВыберите сумму ставки:",
+            call.message.chat.id, call.message.message_id,
+            reply_markup=mines_bet_keyboard(size, mines_count, currency))
+    except Exception:
+        traceback.print_exc()
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("mines_back_cur_"))
+def cb_mines_back_cur(call):
+    bot.answer_callback_query(call.id)
+    try:
+        parts = call.data.split("_")
+        size = int(parts[3])
+        mines_count = int(parts[4])
+        p = get_player(call.from_user.id, call.from_user.first_name)
+        silver = p[2]
+        gold = get_silver(call.from_user.id)
+        bot.edit_message_text(
+            f"💣 Поле {size}x{size} | Мин: {mines_count}\n\n⚪ Серебряных: {silver}\n🟡 Золотых: {gold}\n\nВыберите валюту для ставки:",
+            call.message.chat.id, call.message.message_id,
+            reply_markup=mines_currency_keyboard(size, mines_count))
+    except Exception:
+        traceback.print_exc()
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("mines_bet_"))
+def cb_mines_bet(call):
+    try:
+        parts = call.data.split("_")
+        size = int(parts[2])
+        mines_count = int(parts[3])
+        currency = parts[4]
+        val = parts[5]
 
         if val == "custom":
-            custom_bet_waiting[call.from_user.id] = {"bet_type": f"mines_{size}_{mines_count}", "chat_id": call.message.chat.id, "msg_id": call.message.message_id, "is_mines": True, "size": size, "mines_count": mines_count}
+            bot.answer_callback_query(call.id)
+            custom_bet_waiting[call.from_user.id] = {
+                "bet_type": f"mines_{size}_{mines_count}",
+                "chat_id": call.message.chat.id,
+                "msg_id": call.message.message_id,
+                "is_mines": True,
+                "size": size,
+                "mines_count": mines_count,
+                "currency": currency,
+            }
             safe_edit(call.message.chat.id, call.message.message_id, "✏️ Введите сумму ставки (минимум 5):")
             return
 
         p = get_player(call.from_user.id, call.from_user.first_name)
-        bet = p[2] if val == "allin" else int(val)
+        silver = p[2]
+        gold = get_silver(call.from_user.id)
+        balance = silver if currency == "silver" else gold
+        cur_icon = "⚪" if currency == "silver" else "🟡"
+        bet = balance if val == "allin" else int(val)
 
+        if balance <= 0:
+            bot.answer_callback_query(call.id, f"❌ У вас нет {cur_icon} фишек!", show_alert=True)
+            return
         if bet < 5:
-            bot.answer_callback_query(call.id, "Минимальная ставка 5 фишек!")
+            bot.answer_callback_query(call.id, "❌ Минимальная ставка 5 фишек!", show_alert=True)
             return
-        if bet <= 0:
-            bot.answer_callback_query(call.id, "У вас нет фишек!")
-            return
-        if bet > p[2]:
-            bot.answer_callback_query(call.id, f"Недостаточно фишек! Баланс: {p[2]}")
+        if bet > balance:
+            bot.answer_callback_query(call.id, f"❌ Недостаточно {cur_icon}! Баланс: {balance}", show_alert=True)
             return
 
-        update_balance(call.from_user.id, -bet)
+        bot.answer_callback_query(call.id)
+
+        # Списываем с нужной валюты
+        if currency == "silver":
+            update_balance(call.from_user.id, -bet)
+        else:
+            add_silver(call.from_user.id, -bet)
         session_add_bet(call.from_user.id, bet)
 
         import random as _random
@@ -705,12 +773,13 @@ def cb_mines_bet(call):
             "mines": mines_set,
             "opened": set(),
             "bet": bet,
+            "currency": currency,
             "active": True,
         }
 
         mult = mines_multiplier(size, mines_count, 0)
         bot.edit_message_text(
-            f"💣 Поле {size}x{size} | Мин: {mines_count} | Ставка: {bet} фишек\n\nОткрывайте клетки! Текущий множитель: x{mult}",
+            f"💣 Поле {size}x{size} | Мин: {mines_count} | Ставка: {bet} {cur_icon}\n\nОткрывайте клетки! Текущий множитель: x{mult}",
             call.message.chat.id, call.message.message_id,
             reply_markup=mines_grid_keyboard(call.from_user.id))
     except Exception:
@@ -761,8 +830,9 @@ def cb_mines_open(call):
             kb.add(*buttons)
             kb.add(InlineKeyboardButton("🎮 Играть снова", callback_data="mines_restart"))
             del mines_games[uid]
+            cur_icon = "⚪" if game.get("currency", "silver") == "silver" else "🟡"
             bot.edit_message_text(
-                f"💥 БУМ! Вы попали на мину и потеряли {game['bet']} фишек!",
+                f"💥 БУМ! Вы попали на мину и потеряли {game['bet']} {cur_icon}!",
                 call.message.chat.id, call.message.message_id,
                 reply_markup=kb)
         else:
@@ -775,14 +845,20 @@ def cb_mines_open(call):
 
             if opened >= safe_total:
                 # Все безопасные клетки открыты — автовыигрыш
-                add_silver(uid, potential)
-                new_silver = get_silver(uid)
+                currency = game.get("currency", "silver")
+                cur_icon = "⚪" if currency == "silver" else "🟡"
+                if currency == "silver":
+                    update_balance(uid, potential)
+                    new_bal = get_player(uid)[2]
+                else:
+                    add_silver(uid, potential)
+                    new_bal = get_silver(uid)
                 game["active"] = False
                 del mines_games[uid]
                 kb = InlineKeyboardMarkup()
                 kb.add(InlineKeyboardButton("🎮 Играть снова", callback_data="mines_restart"))
                 bot.edit_message_text(
-                    f"🎉 Вы открыли все клетки! Выигрыш: {potential} 🟡\nЗолотых на балансе: {new_silver} 🟡",
+                    f"🎉 Вы открыли все клетки!\nВыигрыш: {potential} {cur_icon}\nБаланс: {new_bal} {cur_icon}",
                     call.message.chat.id, call.message.message_id,
                     reply_markup=kb)
             else:
@@ -812,8 +888,14 @@ def cb_mines_cashout(call):
 
         mult = mines_multiplier(game["size"], game["mines_count"], opened)
         win = int(game["bet"] * mult)
-        add_silver(uid, win)
-        new_silver = get_silver(uid)
+        currency = game.get("currency", "silver")
+        cur_icon = "⚪" if currency == "silver" else "🟡"
+        if currency == "silver":
+            update_balance(uid, win)
+            new_bal = get_player(uid)[2]
+        else:
+            add_silver(uid, win)
+            new_bal = get_silver(uid)
         session_add_win(uid, win)
         game["active"] = False
         del mines_games[uid]
@@ -821,7 +903,7 @@ def cb_mines_cashout(call):
         kb = InlineKeyboardMarkup()
         kb.add(InlineKeyboardButton("🎮 Играть снова", callback_data="mines_restart"))
         bot.edit_message_text(
-            f"🟡 Вы забрали выигрыш!\nСтавка: {game['bet']} ⚪ | Множитель: x{mult} | Выигрыш: {win} 🟡\nЗолотых: {new_silver} 🟡",
+            f"💰 Вы забрали выигрыш!\nСтавка: {game['bet']} {cur_icon} | Множитель: x{mult} | Выигрыш: {win} {cur_icon}\nБаланс: {new_bal} {cur_icon}",
             call.message.chat.id, call.message.message_id,
             reply_markup=kb)
     except Exception:
@@ -877,10 +959,11 @@ def msg_custom_bet(msg):
         mines_count = data["mines_count"]
         all_cells = list(range(size * size))
         mines_set = set(_random.sample(all_cells, mines_count))
-        mines_games[uid] = {"size": size, "mines_count": mines_count, "mines": mines_set, "opened": set(), "bet": amount, "active": True}
+        cur_icon = "⚪" if currency == "silver" else "🟡"
+        mines_games[uid] = {"size": size, "mines_count": mines_count, "mines": mines_set, "opened": set(), "bet": amount, "currency": currency, "active": True}
         mult = mines_multiplier(size, mines_count, 0)
         bot.send_message(msg.chat.id,
-            f"💣 Поле {size}x{size} | Мин: {mines_count} | Ставка: {amount} фишек\nОткрывайте клетки! Множитель: x{mult}",
+            f"💣 Поле {size}x{size} | Мин: {mines_count} | Ставка: {amount} {cur_icon}\nОткрывайте клетки! Множитель: x{mult}",
             reply_markup=mines_grid_keyboard(uid))
     else:
         bet_type = data["bet_type"]
