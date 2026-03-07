@@ -12,7 +12,7 @@ from db import (init_db, get_player, update_balance, set_balance, set_last_bonus
     add_bet, get_bets, clear_bets, get_top, session_add_bet, session_add_win, session_reset,
     add_silver, get_silver, add_total_deposited, use_promo,
     get_active_deposit_promo, consume_deposit_promo,
-    get_subscribed, set_subscribed)
+    get_subscribed, set_subscribed, apply_referral, get_referral_count)
 import traceback
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
@@ -21,6 +21,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 # ID или @username канала для обязательной подписки
 REQUIRED_CHANNEL = os.environ.get("REQUIRED_CHANNEL", "@RiasChanel")
 SUBSCRIBE_BONUS = 15  # серебряных за подписку
+REFERRAL_BONUS = 15   # серебряных рефереру и новичку
 # =====================================================
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -32,16 +33,21 @@ BLACK_NUMBERS = {2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35}
 
 # =================== СЕССИЯ / ПОДКРУТКА ===================
 
-DRAIN_THRESHOLD = 3.0   # во сколько раз надо выиграть чтобы включился слив
-DRAIN_CHANCE = 0.85     # шанс проигрыша в режиме слива
+DRAIN_PROFIT_THRESHOLD = 75  # сколько фишек прибыли сверх депозита чтобы включился слив
+DRAIN_CHANCE = 0.30           # шанс подставить мину в режиме слива (30%)
 
 def is_draining(user_id):
-    """Проверяет нужно ли сливать игрока — если баланс > DRAIN_THRESHOLD * стартового"""
+    """Включает слив если игрок выиграл больше чем задепозитил на DRAIN_PROFIT_THRESHOLD фишек"""
     p = get_player(user_id)
     if not p:
         return False
-    current_balance = p[2]
-    return current_balance >= STARTING_BALANCE * DRAIN_THRESHOLD
+    balance = p[2]
+    total_deposited = p[5] if len(p) > 5 else 0
+    # Слив только если баланс превышает депозит на 75+ фишек
+    if total_deposited == 0:
+        return False
+    profit = balance - total_deposited
+    return profit >= DRAIN_PROFIT_THRESHOLD
 
 
 
@@ -100,7 +106,7 @@ def main_keyboard():
     kb.row(KeyboardButton("🎰 Играть"), KeyboardButton("💰 Баланс"))
     kb.row(KeyboardButton("🎁 Бонус"), KeyboardButton("🏆 Топ игроков"))
     kb.row(KeyboardButton("📋 Задания"), KeyboardButton("🎟 Промокод"))
-    kb.row(KeyboardButton("📖 Правила"))
+    kb.row(KeyboardButton("👥 Рефералы"), KeyboardButton("📖 Правила"))
     kb.row(KeyboardButton("💳 Пополнить"), KeyboardButton("💸 Вывести"))
     return kb
 
@@ -181,7 +187,32 @@ def new_round_keyboard():
 @bot.message_handler(commands=["start"])
 def cmd_start(msg):
     print(f"[DEBUG] /start от {msg.from_user.id}")
-    get_player(msg.from_user.id, msg.from_user.first_name)
+    uid = msg.from_user.id
+    is_new = get_player(uid) is None
+    get_player(uid, msg.from_user.first_name)
+
+    # Обрабатываем реферальную ссылку
+    parts = msg.text.split()
+    if len(parts) > 1 and parts[1].startswith("ref"):
+        try:
+            referrer_id = int(parts[1][3:])
+            if is_new and apply_referral(uid, referrer_id, REFERRAL_BONUS):
+                # Уведомляем реферера
+                try:
+                    bot.send_message(referrer_id,
+                        f"👥 По вашей ссылке зарегистрировался новый игрок!\n"
+                        f"🎁 Вам начислено +{REFERRAL_BONUS} ⚪ серебряных.")
+                except Exception:
+                    pass
+                bot.send_message(msg.chat.id,
+                    f"🎰 Добро пожаловать в Казино Рулетку!\n\n"
+                    f"🎁 Вы зарегистрировались по реферальной ссылке и получили +{REFERRAL_BONUS} ⚪ серебряных!\n\n"
+                    f"Крути рулетку, делай ставки и выигрывай фишки!\nИспользуй кнопки внизу",
+                    reply_markup=main_keyboard())
+                return
+        except Exception:
+            pass
+
     bot.send_message(msg.chat.id,
         "🎰 Добро пожаловать в Казино Рулетку!\n\nКрути рулетку, делай ставки и выигрывай фишки!\nИспользуй кнопки внизу",
         reply_markup=main_keyboard())
@@ -837,6 +868,27 @@ def msg_custom_bet(msg):
             f"Ставка принята!\n{p_new[1]}: {amount} фишек на {bet_label(bet_type)}\nОстаток: {p_new[2]} фишек\n\nЖдём других или крутим?",
             reply_markup=after_bet_keyboard())
 
+
+# =================== РЕФЕРАЛЫ ===================
+
+@bot.message_handler(func=lambda m: m.text == "👥 Рефералы")
+def msg_referrals(msg):
+    uid = msg.from_user.id
+    get_player(uid, msg.from_user.first_name)
+    count = get_referral_count(uid)
+    bot_info = bot.get_me()
+    ref_link = f"https://t.me/{bot_info.username}?start=ref{uid}"
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("📤 Поделиться ссылкой", switch_inline_query=f"Играй со мной в казино! {ref_link}"))
+    bot.send_message(msg.chat.id,
+        f"👥 <b>Реферальная программа</b>\n\n"
+        f"Приглашай друзей — получайте бонусы вместе!\n\n"
+        f"🎁 <b>Ты получаешь:</b> +{REFERRAL_BONUS} ⚪ за каждого друга\n"
+        f"🎁 <b>Друг получает:</b> +{REFERRAL_BONUS} ⚪ при регистрации\n\n"
+        f"👤 Приглашено друзей: <b>{count}</b>\n\n"
+        f"🔗 Твоя ссылка:\n<code>{ref_link}</code>",
+        parse_mode="HTML",
+        reply_markup=kb)
 
 # =================== ЗАДАНИЯ ===================
 
