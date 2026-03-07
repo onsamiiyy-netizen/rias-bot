@@ -1,4 +1,3 @@
-
 """
 Общий модуль для работы с PostgreSQL
 """
@@ -23,13 +22,20 @@ def init_db():
             last_bonus TEXT DEFAULT NULL,
             diamonds INTEGER DEFAULT 0,
             total_deposited INTEGER DEFAULT 0,
-            subscribed BOOLEAN DEFAULT FALSE
+            subscribed BOOLEAN DEFAULT FALSE,
+            referred_by BIGINT DEFAULT NULL,
+            referral_count INTEGER DEFAULT 0
         )
     """)
     # Миграция: добавляем новые колонки если их нет
-    for col, default in [("diamonds", "0"), ("total_deposited", "0"), ("subscribed", "FALSE")]:
+    for col, default in [("diamonds", "0"), ("total_deposited", "0"), ("subscribed", "FALSE"), ("referred_by", "NULL"), ("referral_count", "0")]:
         try:
-            c.execute(f"ALTER TABLE players ADD COLUMN {col} {'INTEGER' if default != 'FALSE' else 'BOOLEAN'} DEFAULT {default}")
+            if default == "FALSE":
+                c.execute(f"ALTER TABLE players ADD COLUMN {col} BOOLEAN DEFAULT {default}")
+            elif default == "NULL":
+                c.execute(f"ALTER TABLE players ADD COLUMN {col} BIGINT DEFAULT NULL")
+            else:
+                c.execute(f"ALTER TABLE players ADD COLUMN {col} INTEGER DEFAULT {default}")
             conn.commit()
         except Exception:
             conn.rollback()
@@ -118,6 +124,40 @@ def set_subscribed(user_id):
     c.execute("UPDATE players SET subscribed=TRUE WHERE user_id=%s", (user_id,))
     conn.commit()
     conn.close()
+
+def apply_referral(new_user_id, referrer_id, bonus=15):
+    """
+    Привязывает реферала и начисляет бонус обоим.
+    Возвращает True если успешно, False если уже был реферер.
+    """
+    conn = get_conn()
+    c = conn.cursor()
+    # Проверяем что у нового игрока ещё нет реферера
+    c.execute("SELECT referred_by FROM players WHERE user_id=%s", (new_user_id,))
+    row = c.fetchone()
+    if not row or row[0] is not None:
+        conn.close()
+        return False
+    # Нельзя пригласить самого себя
+    if new_user_id == referrer_id:
+        conn.close()
+        return False
+    # Привязываем и начисляем бонусы
+    c.execute("UPDATE players SET referred_by=%s, balance=balance+%s WHERE user_id=%s",
+              (referrer_id, bonus, new_user_id))
+    c.execute("UPDATE players SET balance=balance+%s, referral_count=referral_count+1 WHERE user_id=%s",
+              (bonus, referrer_id))
+    conn.commit()
+    conn.close()
+    return True
+
+def get_referral_count(user_id):
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT referral_count FROM players WHERE user_id=%s", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else 0
 
 def add_diamonds(user_id, amount):
     conn = get_conn()
